@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boxput AI</title>
+    <style>
+        /* --- General Styling & Dark Theme --- */
+        :root {
+            --background-color: #121212;
+            --surface-color: #1e1e1e;
+            --primary-text-color: #e0e0e0;
+            --secondary-text-color: #b0b0b0;
+            --accent-color: #03dac6;
+            --error-color: #cf6679;
+            --header-height: 60px;
+            --input-bar-height: 80px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--primary-text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden; /* Prevent body scroll */
+        }
+
+        /* --- Header --- */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            height: var(--header-height);
+            background-color: var(--surface-color);
+            border-bottom: 1px solid #333;
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .model-selection {
+            display: flex;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            gap: 15px;
+            align-items: center;
+        }
+
+        .model-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        /* Toggle Switch Styles */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 20px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked+.slider {
+            background-color: var(--accent-color);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(20px);
+        }
+
+        /* --- Main Content Area --- */
+        .main-content {
+            display: flex;
+            flex-grow: 1;
+            padding-top: var(--header-height);
+            padding-bottom: var(--input-bar-height);
+            overflow-x: auto; /* Horizontal scroll for columns */
+            scroll-snap-type: x mandatory; /* Snap scrolling */
+        }
+
+        /* --- Chat Columns --- */
+        .chat-column {
+            flex: 0 0 100%; /* Full width on mobile */
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #333;
+            scroll-snap-align: start; /* Snap to the start of each column */
+        }
+        
+        /* Responsive design for larger screens */
+        @media (min-width: 768px) {
+            .chat-column {
+                flex: 0 0 50%; /* Two columns on tablets */
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .chat-column {
+                flex: 0 0 33.333%; /* Three columns on desktops */
+            }
+        }
+
+        .chat-column:last-child {
+            border-right: none;
+        }
+
+        .column-header {
+            padding: 10px 15px;
+            background-color: #2a2a2a;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky; /* Keep header visible within the column */
+            top: 0;
+        }
+        
+        .copy-button {
+            background: none;
+            border: none;
+            color: var(--secondary-text-color);
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 5px;
+        }
+        .copy-button:hover {
+            color: var(--primary-text-color);
+        }
+
+        .chat-history {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto; /* Independent vertical scroll */
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            max-width: 95%;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background-color: var(--accent-color);
+            color: #121212;
+            margin-left: auto;
+        }
+
+        .ai-message {
+            background-color: var(--surface-color);
+        }
+        
+        .error-message {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+        }
+        
+        .typing-indicator span {
+            height: 8px;
+            width: 8px;
+            margin: 0 2px;
+            background-color: var(--secondary-text-color);
+            border-radius: 50%;
+            display: inline-block;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+
+        /* --- Input Bar --- */
+        .input-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: var(--input-bar-height);
+            background-color: var(--surface-color);
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            border-top: 1px solid #333;
+        }
+
+        #prompt-input {
+            flex-grow: 1;
+            padding: 12px 18px;
+            border-radius: 25px;
+            border: 1px solid #444;
+            background-color: #333;
+            color: var(--primary-text-color);
+            font-size: 1rem;
+            outline: none;
+        }
+        #prompt-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .input-buttons {
+            display: flex;
+            align-items: center;
+            margin-left: 10px;
+            gap: 10px;
+        }
+
+        .input-buttons button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            font-size: 0.9rem;
+        }
+
+        #send-button {
+            background-color: var(--accent-color);
+            color: #121212;
+        }
+        
+        #stop-button, #clear-button {
+            background-color: #444;
+            color: var(--primary-text-color);
+        }
+        #stop-button:hover, #clear-button:hover {
+            background-color: #555;
+        }
+
+        #stop-button {
+            display: none; /* Hidden by default */
+        }
+        
+    </style>
+</head>
+<body>
+
+    <!-- Header for model selection -->
+    <header>
+        <div class="logo">Boxput AI</div>
+        <div class="model-selection" id="model-selection">
+            <!-- Toggles will be dynamically generated by JavaScript -->
+        </div>
+    </header>
+
+    <!-- Main content area for chat columns -->
+    <main class="main-content" id="main-content">
+        <!-- Chat columns will be dynamically generated here -->
+    </main>
+
+    <!-- Fixed input bar at the bottom -->
+    <div class="input-bar">
+        <input type="text" id="prompt-input" placeholder="Ask anything...">
+        <div class="input-buttons">
+            <button id="send-button" title="Send Message">➤</button>
+            <button id="stop-button" title="Stop Generation">⏹</button>
+            <button id="clear-button" title="New Chat">🗑️</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // ===================================================================================
+            // --- CONFIGURATION ---
+            // ===================================================================================
+
+            // ▼▼▼ YOUR OPENROUTER API KEY IS ADDED HERE ▼▼▼
+            // WARNING: This method is insecure for public websites and is intended for 
+            // personal or educational use only. Do not expose this key publicly.
+            const API_KEY = "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";
+            // ▲▲▲ YOUR OPENROUTER API KEY IS ADDED HERE ▲▲▲
+
+            const API_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+            // --- Customize Your Models ---
+            // To add/remove models, simply edit this array.
+            // 'id' is the model identifier from OpenRouter.
+            // 'name' is the display name in the UI.
+            const MODELS = [
+                { id: 'openai/gpt-3.5-turbo', name: 'ChatGPT' },
+                { id: 'google/gemini-flash-1.5', name: 'Gemini' },
+                { id: 'deepseek/deepseek-chat', name: 'DeepSeek' }
+                // Example: Add another model
+                // { id: 'mistralai/mistral-7b-instruct', name: 'Mistral' }
+            ];
+
+            // ===================================================================================
+            // --- STATE MANAGEMENT ---
+            // ===================================================================================
+            let abortControllers = {}; // Stores AbortController for each API request to allow cancellation
+
+            // ===================================================================================
+            // --- DOM ELEMENT REFERENCES ---
+            // ===================================================================================
+            const mainContent = document.getElementById('main-content');
+            const promptInput = document.getElementById('prompt-input');
+            const sendButton = document.getElementById('send-button');
+            const stopButton = document.getElementById('stop-button');
+            const clearButton = document.getElementById('clear-button');
+            const modelSelectionContainer = document.getElementById('model-selection');
+
+            // ===================================================================================
+            // --- INITIALIZATION ---
+            // ===================================================================================
+
+            // Function to dynamically create model toggles and chat columns
+            const initializeUI = () => {
+                mainContent.innerHTML = '';
+                modelSelectionContainer.innerHTML = '';
+
+                MODELS.forEach(model => {
+                    // Create Model Toggle Switch in Header
+                    const toggleDiv = document.createElement('div');
+                    toggleDiv.className = 'model-toggle';
+                    toggleDiv.innerHTML = `
+                        <span>${model.name}</span>
+                        <label class="switch">
+                            <input type="checkbox" data-model-id="${model.id}" checked>
+                            <span class="slider"></span>
+                        </label>
+                    `;
+                    modelSelectionContainer.appendChild(toggleDiv);
+
+                    // Create Chat Column in Main Content
+                    const column = document.createElement('div');
+                    const columnId = `column-${model.id.replace(/[\/\.]/g, '-')}`;
+                    column.className = 'chat-column';
+                    column.id = columnId;
+                    
+                    column.innerHTML = `
+                        <div class="column-header">
+                            <span>${model.name}</span>
+                            <button class="copy-button" title="Copy Chat">&#x1f4cb;</button>
+                        </div>
+                        <div class="chat-history"></div>
+                    `;
+                    mainContent.appendChild(column);
+                });
+                
+                // Add event listeners after elements are created
+                addCopyButtonListeners();
+            };
+            
+            // ===================================================================================
+            // --- EVENT LISTENERS ---
+            // ===================================================================================
+            sendButton.addEventListener('click', handleSendPrompt);
+            promptInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault(); // Prevent new line on Enter
+                    handleSendPrompt();
+                }
+            });
+            stopButton.addEventListener('click', handleStopGeneration);
+            clearButton.addEventListener('click', handleClearChat);
+
+            function addCopyButtonListeners() {
+                document.querySelectorAll('.copy-button').forEach(button => {
+                    button.addEventListener('click', handleCopy);
+                });
+            }
+            
+            // ===================================================================================
+            // --- CORE LOGIC ---
+            // ===================================================================================
+
+            // Handles sending the prompt to all selected models
+            async function handleSendPrompt() {
+                const prompt = promptInput.value.trim();
+                if (!prompt) return;
+
+                const selectedModels = getSelectedModels();
+                if (selectedModels.length === 0) {
+                    alert("Please select at least one AI model to chat with.");
+                    return;
+                }
+                
+                toggleUIForLoading(true);
+
+                selectedModels.forEach(modelId => {
+                    displayUserMessage(prompt, modelId);
+                    callApi(prompt, modelId);
+                });
+
+                promptInput.value = '';
+            }
+
+            // Performs the client-side API call to OpenRouter
+            async function callApi(prompt, modelId) {
+                const chatHistoryContainer = getChatHistoryContainer(modelId);
+                const placeholder = displayPlaceholder(chatHistoryContainer);
+                
+                abortControllers[modelId] = new AbortController();
+
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${API_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            model: modelId,
+                            messages: [{ role: "user", content: prompt }]
+                        }),
+                        signal: abortControllers[modelId].signal
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error.message || `HTTP error! Status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    const aiResponse = data.choices[0].message.content;
+                    
+                    displayAiMessage(aiResponse, placeholder);
+
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        displayErrorMessage("Generation stopped by user.", placeholder);
+                    } else {
+                        displayErrorMessage(`API Error: ${error.message}`, placeholder);
+                    }
+                } finally {
+                    delete abortControllers[modelId];
+                    if (Object.keys(abortControllers).length === 0) {
+                       toggleUIForLoading(false);
+                    }
+                }
+            }
+
+            // ===================================================================================
+            // --- UI UPDATE FUNCTIONS ---
+            // ===================================================================================
+            
+            // Displays the user's message in the specified model's column
+            function displayUserMessage(prompt, modelId) {
+                const chatHistory = getChatHistoryContainer(modelId);
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message user-message';
+                messageDiv.textContent = prompt;
+                chatHistory.appendChild(messageDiv);
+                scrollToBottom(chatHistory);
+            }
+
+            // Displays the "Generating..." placeholder
+            function displayPlaceholder(container) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'message ai-message typing-indicator';
+                placeholder.innerHTML = `<span></span><span></span><span></span>`;
+                container.appendChild(placeholder);
+                scrollToBottom(container);
+                return placeholder;
+            }
+
+            // Replaces the placeholder with the actual AI response
+            function displayAiMessage(response, placeholder) {
+                placeholder.className = 'message ai-message'; // Stop animation
+                placeholder.innerHTML = ''; // Clear typing dots
+                placeholder.textContent = response;
+            }
+
+            // Replaces the placeholder with an error message
+            function displayErrorMessage(error, placeholder) {
+                placeholder.className = 'message error-message';
+                placeholder.innerHTML = '';
+                placeholder.textContent = error;
+            }
+
+            // Toggles the UI state between loading and idle
+            function toggleUIForLoading(isLoading) {
+                if (isLoading) {
+                    sendButton.style.display = 'none';
+                    stopButton.style.display = 'block';
+                    promptInput.disabled = true;
+                } else {
+                    sendButton.style.display = 'block';
+                    stopButton.style.display = 'none';
+                    promptInput.disabled = false;
+                    promptInput.focus();
+                }
+            }
+
+            // ===================================================================================
+            // --- HELPER FUNCTIONS & ACTIONS ---
+            // ===================================================================================
+            
+            // Returns an array of model IDs for the toggles that are switched on
+            function getSelectedModels() {
+                const models = [];
+                document.querySelectorAll('#model-selection input[type="checkbox"]:checked').forEach(toggle => {
+                    models.push(toggle.dataset.modelId);
+                });
+                return models;
+            }
+            
+            // Gets the DOM element for a model's chat history
+            function getChatHistoryContainer(modelId) {
+                const columnId = `column-${modelId.replace(/[\/\.]/g, '-')}`;
+                return document.querySelector(`#${columnId} .chat-history`);
+            }
+
+            // Automatically scrolls a chat container to the bottom
+            function scrollToBottom(element) {
+                element.scrollTop = element.scrollHeight;
+            }
+
+            // Action: Stops all ongoing API requests
+            function handleStopGeneration() {
+                console.log("Stopping generation...");
+                Object.values(abortControllers).forEach(controller => controller.abort());
+            }
+
+            // Action: Clears all chat histories
+            function handleClearChat() {
+                if (confirm("Are you sure you want to clear all conversations?")) {
+                    document.querySelectorAll('.chat-history').forEach(history => {
+                        history.innerHTML = '';
+                    });
+                }
+            }
+            
+            // Action: Copies the content of a single chat column
+            function handleCopy(event) {
+                const chatHistory = event.target.closest('.chat-column').querySelector('.chat-history');
+                let chatText = '';
+                chatHistory.querySelectorAll('.message').forEach(message => {
+                    let type = 'System:';
+                    if (message.classList.contains('user-message')) {
+                        type = 'User:';
+                    } else if (message.classList.contains('ai-message')) {
+                        type = 'AI:';
+                    }
+                    chatText += `${type}\n${message.textContent}\n\n`;
+                });
+
+                navigator.clipboard.writeText(chatText.trim()).then(() => {
+                    alert('Chat copied to clipboard!');
+                }).catch(err => {
+                    console.error('Failed to copy chat: ', err);
+                    alert('Failed to copy chat.');
+                });
+            }
+
+            // --- RUN INITIALIZATION ON PAGE LOAD ---
+            initializeUI();
+        });
+    </script>
+
+</body>
+  </html>
